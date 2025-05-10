@@ -10,11 +10,8 @@ def plot_sweep_histograms(
     xlim_clustering=None,
     xlim_centrality=None
 ):
-
     df = pd.read_csv(csv_file)
-
     sns.set_theme(style="white", context="talk")
-
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
     sns.histplot(data=df, x="density_mean", bins=20, kde=True, ax=axes[0], color="skyblue")
