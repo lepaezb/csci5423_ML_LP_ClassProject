@@ -1,0 +1,179 @@
+---
+title: "Soccer Project"
+output: html_document
+date: "2025-04-09"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r part0}
+#---------------------------------------
+# 0. Load dependencies
+#---------------------------------------
+library(tidyverse)
+library(StatsBombR)
+library(igraph)
+library(stringr)
+library(caret)
+library(corrplot)
+source("data/data_df.R")
+source("utils/get_and_proccess_df.R")
+source("utils/make_networks.R")
+source("utils/plots.R")
+source("utils/get_networks_stats.R")
+source("utils/statistical_analysis.R")
+```
+
+```{r part1}
+#------------------------------------------------------------------------------------
+# 1. Get data, process dfs, and generate networks
+#------------------------------------------------------------------------------------
+# Get all matches from the FIFA World Cup 2022 and save as RDS (results/rds)
+process_all_matches(competition = "FIFA World Cup", year = "2022", type = "Pass") 
+
+# Read all saved RDS files (choose either results/edge_list or results/filtered)
+all_teams_edge_list <- readRDS("results/rds/edge_list/all_team_edge_list.rds")
+
+# Create network objects for all teams
+all_pass_networks <- create_all_pass_networks(all_teams_edge_list, use_ids = TRUE, weight = "pass_count")
+
+# Plot final game networks
+png(filename = "results/Figure1.png", 
+    width = 1200, height = 600, 
+    units = "px", res = 100)
+par(mfrow = c(1, 2))
+plot_network(all_pass_networks$match_10_Argentina, layout_type = "kk", 
+             node_size_factor = 10, edge_width_factor = 0.1,title = "Argentina")
+plot_network(all_pass_networks$match_10_France, layout_type = "kk", 
+             node_size_factor = 10, edge_width_factor = 0.1, title = "France")
+dev.off() 
+```
+
+
+```{r part2}
+#------------------------------------------------------------------------------------
+# 2. Extract network info and statistics for each graph and average team results
+#------------------------------------------------------------------------------------
+# Derive statistics for each team and in each match
+all_network_stats <- extract_network_descriptive_stats(all_pass_networks)
+
+# Calculate aggregate statistics per team for competition
+aggregated_network_stats <- aggregate_network_calc(all_network_stats)
+
+# Merge team's network statistics with performance results in competition
+results <- merge(aggregated_network_stats, rankings_df, 
+                   by.x = "team_name", 
+                   by.y = "Team", 
+                   all = TRUE)
+```
+
+```{r part3}
+#----------------------------------------------------------------------------------
+# 3. Test 2014 World Cup predictors for success in 2022 World Cup
+#----------------------------------------------------------------------------------
+
+# Variables associated to team positive performance for World Cup 2014
+clemente_predictors <- c("passes", "density","diameter", "transitivity" )
+clemente_eq <- performance_score ~ passes + density + diameter + transitivity
+
+# Create and save the summary table
+create_model_summary_table(
+  formula = clemente_eq,
+  data = results,
+  output_path = "results/Table1.txt"
+)
+
+# Correlation matrix for World Cup 2014 predictors in World Cup 2022 performance
+png(filename = "results/Figure2.png", 
+    width = 1200, height = 600, 
+    units = "px", res = 100)
+correlation_matrix <- cor(results[, c(clemente_predictors, "performance_score")])
+corrplot(correlation_matrix, method = "circle", type = "upper", tl.col = "black", tl.srt = 45)
+dev.off() 
+
+# Scatter plot with correlation for each predictor vs performance. Colored by group stage reached.
+png(filename = "results/Figure3.png", 
+    width = 1200, height = 600, 
+    units = "px", res = 100)
+plot_predictors(data = results, 
+                predictors = clemente_predictors,
+                target_var = "performance_score",
+                grouping_var = "Stage_Reached",
+                ncol = 2,
+                title = "WC2014 Predictors Explaining WC2022 Performance")
+dev.off() 
+```
+
+```{r part 4}
+#-----------------------------------------------------------------------------
+# 4. Adjusting model for World Cup 2022 with network global statistics
+#-----------------------------------------------------------------------------
+
+# All network metrics used in this project
+all_network_predictors <- c("nodes", "edges", "passes", "density", "diameter", 
+                     "transitivity", "transitivity_barrat", "reciprocity")
+
+# Correlation matrix for all variables
+png(filename = "results/Figure4.png", 
+    width = 1200, height = 600, 
+    units = "px", res = 100)
+correlation_matrix <- cor(results[, c(all_network_predictors, "performance_score")])
+corrplot(correlation_matrix, method = "circle", type = "upper", tl.col = "black", tl.srt = 45)
+dev.off() 
+
+# Variables associated to team positive performance for World Cup 2022
+wc2024_predictors <- c("passes", "reciprocity")
+wc2024_eq <- performance_score ~ passes + reciprocity
+
+# Create and save the summary table
+create_model_summary_table(
+  formula = wc2024_eq,
+  data = results,
+  output_path = "results/Table2.txt"
+)
+
+# Scatter plot with correlation for each predictor vs performance. Colored by group stage reached.
+png(filename = "results/Figure5.png", 
+    width = 1200, height = 600, 
+    units = "px", res = 100)
+plot_predictors(data = results, 
+                predictors = wc2024_predictors,
+                target_var = "performance_score",
+                grouping_var = "Stage_Reached",
+                ncol = 2,
+                title = "Predictors that Best Explain WC2022 Performance")
+dev.off() 
+```
+
+```{r part 5}
+#-----------------------------------------------------------------------------
+# 4. PCA Analysis
+#-----------------------------------------------------------------------------
+
+# Prepare data, do PCA, and extract scores
+pca_data <- scale(results[, all_network_predictors])
+pca_result <- prcomp(pca_data, center = TRUE, scale. = TRUE)
+pca_scores <- as.data.frame(pca_result$x)
+
+# Add performance metrics back to PCA results
+pca_scores$performance_score <- results$performance_score
+pca_scores$Stage_Reached <- results$Stage_Reached
+pca_scores$team_name <- results$team_name
+
+# 2-D PCA plot with teams colored by performance_score
+png(filename = "results/Figure6.png", 
+    width = 1200, height = 600, 
+    units = "px", res = 100)
+ggplot(pca_scores, aes(x = PC1, y = PC2, color = performance_score)) +
+  geom_point(size = 3, alpha = 0.7) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "PCA - Teams Colored by Performance",
+       x = paste0("PC1 (", round(summary(pca_result)$importance[2,1]*100, 1), "%)"),
+       y = paste0("PC2 (", round(summary(pca_result)$importance[2,2]*100, 1), "%)"))
+dev.off() 
+```

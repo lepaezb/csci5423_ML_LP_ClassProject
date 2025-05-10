@@ -1,0 +1,29 @@
+## MODEL SUMMARY
+
+Formula: performance_score ~ passes + density + diameter + transitivity 
+
+R-squared: 0.1995 
+Adjusted R-squared: 0.081 
+F-statistic: 1.6827 on 4 and 27 DF
+Model p-value: 0.183 
+
+## ANOVA RESULTS
+
+         Term     F_value    P_value Significance
+ passes       3.856837529 0.05991662            .
+ density      1.036375959 0.31770183             
+ diameter     0.003881718 0.95078013             
+ transitivity 1.833779446 0.18690790             
+
+
+## REGRESSION COEFFICIENTS
+
+         Term  Estimate Std_Error t_value P_value Significance
+  (Intercept)   83.7390   50.5407  1.6569  0.1091             
+       passes    0.0297    0.0177  1.6764  0.1052             
+      density   21.5094   72.4160  0.2970  0.7687             
+     diameter    0.8960    3.1404  0.2853  0.7776             
+ transitivity -122.0252   90.1106 -1.3542  0.1869             
+
+
+Significance codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
